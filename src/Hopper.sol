@@ -30,7 +30,7 @@ contract Hopper {
 
         newLocation = CREATE3.deploy(
             keccak256(abi.encodePacked(msg.sender, block.difficulty)), 
-            abi.encodePacked(deplCode, abi.encode(dParticipantsNo, depHash)), 
+            abi.encodePacked(deplCode, abi.encode(0, depHash)), 
             value
         );
 
@@ -87,7 +87,7 @@ contract Hopper {
 
         _deposit(publicKey);
         ringHash = _createRingHash();
-        newLocation = _hop(address(this).balance, deplCode);
+        newLocation = _hop(0, deplCode);
 
     }
 

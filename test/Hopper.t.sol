@@ -119,8 +119,8 @@ contract HopperTest is Test {
         (,,dummypublicKeys[5]) = getPK(address(6));
         address newRing = doHopDeposit(dummypublicKeys[5]);
 
-        assertEq(address(ring).balance, 0 ether);
-        assertEq(address(newRing).balance, 6 ether);
+        assertEq(address(ring).balance, 6 ether);
+        assertEq(address(newRing).balance, 0 ether);
 
         
     }
@@ -163,7 +163,7 @@ contract HopperTest is Test {
 
         
 
-        Hopper(newRing).withdraw(
+        Hopper(ring).withdraw(
             payable(address(uint160(5))),
             c0, 
             keyImage, 
@@ -173,7 +173,50 @@ contract HopperTest is Test {
         assertEq(address(5).balance, 1 ether);
 
 
+    }
+
+    function testNewRing() public {
+
+        vm.deal(msg.sender, 100 ether);
+
+        uint256[2][10] memory dummypublicKeys;
+        uint256[10] memory randomSKs;
+        uint256[10] memory stealthSKs;
         
+        for(uint256 i = 0; i<5; i++){
+            (randomSKs[i],stealthSKs[i],dummypublicKeys[i]) = getPK(address(uint160(i+1)));
+            ring.deposit{value: 1 ether}(dummypublicKeys[i]);
+        }      
+
+        (randomSKs[5],stealthSKs[5],dummypublicKeys[5]) = getPK(address(6));
+        address newRing = doHopDeposit(dummypublicKeys[5]);
+
+        uint256[2][] memory pubKeys = ring.getPubKeys();
+
+
+
+        bytes memory pubKeysBytes = abi.encode(pubKeys);
+
+        (uint256 c0, uint256[2] memory keyImage, uint256[] memory s) = signPK(randomSKs[4], address(uint160(5)), ring.ringHash(), pubKeysBytes);
+
+        
+
+        Hopper(ring).withdraw(
+            payable(address(uint160(5))),
+            c0, 
+            keyImage, 
+            s
+        );
+
+        assertEq(address(5).balance, 1 ether);
+
+        (,,dummypublicKeys[6]) = getPK(address(uint160(69)));
+        Hopper(newRing).deposit{value: 1 ether}(dummypublicKeys[6]);
+
+        assertEq(newRing.balance, 1 ether);
+
+
+
     }
 
     function testFailDeposit() public {

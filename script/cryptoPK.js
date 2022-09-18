@@ -259,13 +259,13 @@ export function createRandomSk() {
     return hexlify(randomBytes(32));
 }
 export function getStealthParams(randomSk, targetAddress) {
-    process.stderr.write('getStealthParams, randomSk: ' + randomSk.toString());
+    //process.stderr.write('getStealthParams, randomSk: ' + randomSk.toString());
 
     const stealthSk = h1(serialize([randomSk, targetAddress]));
     const stealthPk = bn128.ecMulG(stealthSk);
 
-    process.stderr.write('getStealthParams, stealthSk: ' + stealthSk.toString());
-    process.stderr.write('getStealthParams, stealthPk: ' + stealthPk.toString());
+    //process.stderr.write('getStealthParams, stealthSk: ' + stealthSk.toString());
+    //process.stderr.write('getStealthParams, stealthPk: ' + stealthPk.toString());
 
     return { stealthSk, stealthPk };
 }
@@ -297,8 +297,8 @@ function findSecretIdx(randomSk, targetAddress, publicKeysBN) {
     const { stealthPk, stealthSk } = getStealthParams(randomSk, targetAddress);
     // throw new Error(`debug: looking for stealthPk ${stealthPk.toString()} (from ${randomSk}, ${targetAddress})  NB, stealthSk is ${stealthSk.toString()}`);
     let secretIdx = publicKeysBN.findIndex((curPubKey) => {
-        process.stderr.write(`publicKeysBN.findIndex, ${curPubKey[0]}.cmp(${stealthPk[0]}) ==> ${curPubKey[0].cmp(stealthPk[0])}\n`)
-        process.stderr.write(`publicKeysBN.findIndex, ${curPubKey[1]}.cmp(${stealthPk[1]}) ==> ${curPubKey[1].cmp(stealthPk[1])}\n`)
+        //process.stderr.write(`publicKeysBN.findIndex, ${curPubKey[0]}.cmp(${stealthPk[0]}) ==> ${curPubKey[0].cmp(stealthPk[0])}\n`)
+        //process.stderr.write(`publicKeysBN.findIndex, ${curPubKey[1]}.cmp(${stealthPk[1]}) ==> ${curPubKey[1].cmp(stealthPk[1])}\n`)
 
         return (curPubKey[0].cmp(stealthPk[0]) === 0 &&
             curPubKey[1].cmp(stealthPk[1]) === 0);
@@ -334,7 +334,7 @@ export function haveCake(targetAddress) {
       stealthPk, // Point
     } = getParamsForTargetAddress(targetAddress);
 
-    process.stderr.write('\n\n output targetAddress:' + targetAddress +' randomSk: ' + randomSk.toString() + ' stealthSk: ' + stealthSk.toString() + ' stealthPk:' + stealthPk.toString());
+    //process.stderr.write('\n\n output targetAddress:' + targetAddress +' randomSk: ' + randomSk.toString() + ' stealthSk: ' + stealthSk.toString() + ' stealthPk:' + stealthPk.toString());
   
     return defaultAbiCoder.encode(
       ['address', 'uint256', 'uint256', 'uint256[2]'],
