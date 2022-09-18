@@ -13,6 +13,7 @@ import { keccak256 } from '@ethersproject/keccak256';
 import { randomBytes } from '@ethersproject/random';
 import BN from 'bn.js';
 import EC from 'elliptic';
+import ethers, { BigNumber } from 'ethers';
 // AltBn128 field properties
 const P = new BN('21888242871839275222246405745257275088696311157297823662689037894645226208583', 10);
 const N = new BN('21888242871839275222246405745257275088548364400416034343698204186575808495617', 10);
@@ -244,6 +245,9 @@ const serialize = (arr) => {
             acc = acc + x.getX().toString(16).padStart(64, '0');
             acc = acc + x.getY().toString(16).padStart(64, '0');
         }
+        else if (x instanceof BigNumber) {
+            throw new Error('unsupported Bignumber, use strings instead');
+        }
         else if (x.toString !== undefined) {
             acc = acc + x.toString(16).padStart(64, '0');
         }
@@ -255,8 +259,14 @@ export function createRandomSk() {
     return hexlify(randomBytes(32));
 }
 export function getStealthParams(randomSk, targetAddress) {
+    process.stderr.write('getStealthParams, randomSk: ' + randomSk.toString());
+
     const stealthSk = h1(serialize([randomSk, targetAddress]));
     const stealthPk = bn128.ecMulG(stealthSk);
+
+    process.stderr.write('getStealthParams, stealthSk: ' + stealthSk.toString());
+    process.stderr.write('getStealthParams, stealthPk: ' + stealthPk.toString());
+
     return { stealthSk, stealthPk };
 }
 export function getParamsForTargetAddress(targetAddress) {
@@ -269,13 +279,14 @@ export function getParamsForTargetAddress(targetAddress) {
     };
 }
 function filterConvertPublicKeysToBN(ringPublicKeys) {
-    throw new Error(`debug: [${ringPublicKeys.map(k_p => `[(a)${k_p[0].toString(10)}(/a),(b)${k_p[1].toString(10)}(/b)]`).join(',')}`);
+    //throw new Error(`debug: [${ringPublicKeys.map(k_p => `[(a)${k_p[0].toString(10)}(/a),(b)${k_p[1].toString(10)}(/b)]`).join(',')}`);
+    
     return ringPublicKeys
         .map((x) => {
         return [
             // Slice the '0x'
-            new BN(Buffer.from(x[0].slice(2), 'hex')),
-            new BN(Buffer.from(x[1].slice(2), 'hex')),
+            new BN(x[0].toString()),
+            new BN(x[1].toString()),
         ];
     })
         .filter((x) => x[0].cmp(bnZero) !== 0 && x[1].cmp(bnZero) !== 0);
@@ -283,9 +294,12 @@ function filterConvertPublicKeysToBN(ringPublicKeys) {
 function findSecretIdx(randomSk, targetAddress, publicKeysBN) {
     // Check if user is able to generate any one of these public keys
 
-    //throw new Error(`debug: [${publicKeysBN.map(k => k.toString('hex')).join(',')}]`);
-    const { stealthPk } = getStealthParams(randomSk, targetAddress);
+    const { stealthPk, stealthSk } = getStealthParams(randomSk, targetAddress);
+    // throw new Error(`debug: looking for stealthPk ${stealthPk.toString()} (from ${randomSk}, ${targetAddress})  NB, stealthSk is ${stealthSk.toString()}`);
     let secretIdx = publicKeysBN.findIndex((curPubKey) => {
+        process.stderr.write(`publicKeysBN.findIndex, ${curPubKey[0]}.cmp(${stealthPk[0]}) ==> ${curPubKey[0].cmp(stealthPk[0])}\n`)
+        process.stderr.write(`publicKeysBN.findIndex, ${curPubKey[1]}.cmp(${stealthPk[1]}) ==> ${curPubKey[1].cmp(stealthPk[1])}\n`)
+
         return (curPubKey[0].cmp(stealthPk[0]) === 0 &&
             curPubKey[1].cmp(stealthPk[1]) === 0);
     });
@@ -293,6 +307,7 @@ function findSecretIdx(randomSk, targetAddress, publicKeysBN) {
 }
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
 export function makeWithdrawArgs(randomSk, targetAddress, ringHash, ringPublicKeys) {
+    //throw new Error(`debug: [${ringPublicKeys.map(k_p => `[(a)${k_p[0].toString(10)}(/a),(b)${k_p[1].toString(10)}(/b)]`).join(',')}`);
     //throw new Error(`debug: [${ringPublicKeys.map(k => k.toString('hex')).join(',')}]`);
 
     const publicKeysBN = filterConvertPublicKeysToBN(ringPublicKeys);
@@ -318,6 +333,8 @@ export function haveCake(targetAddress) {
       stealthSk, // BN
       stealthPk, // Point
     } = getParamsForTargetAddress(targetAddress);
+
+    process.stderr.write('\n\n output targetAddress:' + targetAddress +' randomSk: ' + randomSk.toString() + ' stealthSk: ' + stealthSk.toString() + ' stealthPk:' + stealthPk.toString());
   
     return defaultAbiCoder.encode(
       ['address', 'uint256', 'uint256', 'uint256[2]'],
@@ -330,6 +347,8 @@ export function haveCake(targetAddress) {
     );
   }
 export function eatCake(randomSk, targetAddress, ringHash, ringPublicKeys) {
+    // throw new Error(`debug: [${ringPublicKeys.map(k_p => `[(a)${k_p[0].toString(10)}(/a),(b)${k_p[1].toString(10)}(/b)]`).join(',')}`);
+    
     const withdrawArgs = makeWithdrawArgs(randomSk, targetAddress, ringHash, ringPublicKeys);
     return defaultAbiCoder.encode(['address', 'uint256', 'uint256[2]', 'uint256[]'], withdrawArgs);
 }
@@ -344,6 +363,15 @@ process.stdout.write(process.argv[2] === 'haveCake'
         //     process.argv[KEYS_OFFSET + idx * 2 + 1],
         // ]);
 
-        const inputKeys = defaultAbiCoder.decode(['uint256[2][]'], process.argv[6])
+        const [inputKeys] = defaultAbiCoder.decode(['uint256[2][]'], process.argv[6])
+            /*
+        const inputKeys0 = defaultAbiCoder.decode(['uint256[2]'], process.argv[6])
+        const inputKeys1 = defaultAbiCoder.decode(['uint256[2]'], process.argv[7])
+        const inputKeys2 = defaultAbiCoder.decode(['uint256[2]'], process.argv[8])
+        const inputKeys3 = defaultAbiCoder.decode(['uint256[2]'], process.argv[9])
+        const inputKeys4 = defaultAbiCoder.decode(['uint256[2]'], process.argv[10])
+        const inputKeys5 = defaultAbiCoder.decode(['uint256[2]'], process.argv[11])
+        inputKeys = inputKeys0 + inputKeys1 + inputKeys2 + inputKeys3 + inputKeys4 + inputKeys5;
+        */
         return eatCake(process.argv[3], process.argv[4], process.argv[5], inputKeys);
     })());

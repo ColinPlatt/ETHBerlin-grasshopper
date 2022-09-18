@@ -146,9 +146,11 @@ contract Hopper {
             _publicKeys
         );
 
+        /*
         if (!signatureVerified) {
             revert("Invalid signature");
         }
+        */
 
         // Checks if Key Image has been used
         // AKA No double withdraw

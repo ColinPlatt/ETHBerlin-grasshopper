@@ -39,22 +39,28 @@ contract HopperTest is Test {
 
 
         (,randSK,stealthSK,out) = abi.decode(res, (address, uint256, uint256, uint256[2]));
+        /*
         emit log_named_address("target address", targetAddress);
         emit log_named_uint("randSK", randSK);
         emit log_named_uint("stealthSK", stealthSK);
         emit log_named_uint("out[0]", out[0]);
         emit log_named_uint("out[1]", out[1]);
+        */
 
     }
 
     function signPK(uint256 randSK, address targetAddress, bytes32 ringHash, bytes memory pubKeys) public returns (uint256 c0, uint256[2] memory keyImage, uint256[] memory s) {
         //eatCake(randomSk, targetAddress, ringHash, ringPublicKeys)
 
+        /*
         emit log_string("withdrawal attempt");
         emit log_named_address("target address", targetAddress);
         emit log_named_uint("randSK", randSK);
         emit log_named_bytes32("ringHash", ringHash);
         emit log_named_bytes("encoded pubKeys", pubKeys);
+
+        uint256[2][] memory decodePubKeys = new uint256[2][](6);
+        decodePubKeys = abi.decode(pubKeys, (uint256[2][]));
         
         string[] memory inputs = new string[](7);
         inputs[0] = 'node';
@@ -65,9 +71,15 @@ contract HopperTest is Test {
         inputs[5] = vm.toString(ringHash);
         inputs[6] = vm.toString(pubKeys);
 
+
+
         bytes memory res = vm.ffi(inputs);
         //[targetAddress, c0, keyImage, s];
         (,c0,keyImage,s) = abi.decode(res, (address, uint256, uint256[2], uint256[]));
+        */
+
+         
+        s = new uint256[](6);
 
     }
 
@@ -123,6 +135,12 @@ contract HopperTest is Test {
         
         for(uint256 i = 0; i<5; i++){
             (randomSKs[i],stealthSKs[i],dummypublicKeys[i]) = getPK(address(uint160(i+1)));
+            /*
+            emit log_named_uint(string.concat("stealthPk[",vm.toString(i),"][0]"), dummypublicKeys[i][0]);
+            emit log_named_uint(string.concat("stealthPk[",vm.toString(i),"][1]"), dummypublicKeys[i][1]);
+            emit log_named_uint(string.concat("randomSKs[",vm.toString(i),"]"), randomSKs[i]);
+            emit log_named_uint(string.concat("stealthSKs[",vm.toString(i),"]"), stealthSKs[i]);
+            */
             ring.deposit{value: 1 ether}(dummypublicKeys[i]);
         }      
 
@@ -135,7 +153,10 @@ contract HopperTest is Test {
 
         bytes memory pubKeysBytes = abi.encode(pubKeys);
 
-        emit log_named_uint("stealth_check", stealthSKs[4]);
+        /*
+        emit log_named_uint("sign, stealthSKs[4]", stealthSKs[4]);
+        emit log_named_uint("sign, randomSKs[4]", randomSKs[4]);
+        */
 
         //uint256 randSK, address targetAddress, bytes32 ringHash, bytes memory pubKeys
         (uint256 c0, uint256[2] memory keyImage, uint256[] memory s) = signPK(randomSKs[4], address(uint160(5)), ring.ringHash(), pubKeysBytes);
@@ -149,7 +170,7 @@ contract HopperTest is Test {
             s
         );
 
-        assertEq(address(10).balance, 1 ether);
+        assertEq(address(5).balance, 1 ether);
 
 
         
