@@ -40,14 +40,21 @@ contract HopperTest is Test {
 
         (,randSK,stealthSK,out) = abi.decode(res, (address, uint256, uint256, uint256[2]));
         emit log_named_address("target address", targetAddress);
+        emit log_named_uint("randSK", randSK);
+        emit log_named_uint("stealthSK", stealthSK);
         emit log_named_uint("out[0]", out[0]);
         emit log_named_uint("out[1]", out[1]);
-        emit log_named_address("//target address", targetAddress);
 
     }
 
     function signPK(uint256 randSK, address targetAddress, bytes32 ringHash, bytes memory pubKeys) public returns (uint256 c0, uint256[2] memory keyImage, uint256[] memory s) {
         //eatCake(randomSk, targetAddress, ringHash, ringPublicKeys)
+
+        emit log_string("withdrawal attempt");
+        emit log_named_address("target address", targetAddress);
+        emit log_named_uint("randSK", randSK);
+        emit log_named_bytes32("ringHash", ringHash);
+        emit log_named_bytes("encoded pubKeys", pubKeys);
         
         string[] memory inputs = new string[](7);
         inputs[0] = 'node';
