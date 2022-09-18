@@ -24,10 +24,44 @@ contract HopperTest is Test {
         inputs[1] = 'script/generatePK.js';
 
         bytes memory res = vm.ffi(inputs);
-        (uint256 raw1, uint256 raw2) = abi.decode(res, (uint256, uint256));
+        (out[0], out[1]) = abi.decode(res, (uint256, uint256));
+    }
 
-        out[0] = uint256(raw1);
-        out[1] = uint256(raw2);
+
+    function getPK(address targetAddress) public returns (uint256 randSK, uint256 stealthSK, uint256[2] memory out) {
+        string[] memory inputs = new string[](4);
+        inputs[0] = 'node';
+        inputs[1] = 'script/cryptoPK.js';
+        inputs[2] = 'haveCake';
+        inputs[3] = vm.toString(targetAddress);
+
+        bytes memory res = vm.ffi(inputs);
+
+
+        (,randSK,stealthSK,out) = abi.decode(res, (address, uint256, uint256, uint256[2]));
+        emit log_named_address("target address", targetAddress);
+        emit log_named_uint("out[0]", out[0]);
+        emit log_named_uint("out[1]", out[1]);
+        emit log_named_address("//target address", targetAddress);
+
+    }
+
+    function signPK(uint256 randSK, address targetAddress, bytes32 ringHash, bytes memory pubKeys) public returns (uint256 c0, uint256[2] memory keyImage, uint256[] memory s) {
+        //eatCake(randomSk, targetAddress, ringHash, ringPublicKeys)
+        
+        string[] memory inputs = new string[](7);
+        inputs[0] = 'node';
+        inputs[1] = 'script/cryptoPK.js';
+        inputs[2] = 'eatCake';
+        inputs[3] = vm.toString(randSK);
+        inputs[4] = vm.toString(targetAddress);
+        inputs[5] = vm.toString(ringHash);
+        inputs[6] = vm.toString(pubKeys);
+
+        bytes memory res = vm.ffi(inputs);
+        //[targetAddress, c0, keyImage, s];
+        (,c0,keyImage,s) = abi.decode(res, (address, uint256, uint256[2], uint256[]));
+
     }
 
     function doDeployment() public logs_gas {
@@ -38,7 +72,7 @@ contract HopperTest is Test {
 
         vm.deal(msg.sender, 100 ether);
 
-        uint256[2] memory dummypublicKey = getPK();
+        (,,uint256[2] memory dummypublicKey) = getPK(msg.sender);
         
         ring.deposit{value: 1 ether}(dummypublicKey);
 
@@ -57,17 +91,59 @@ contract HopperTest is Test {
         uint256[2][10] memory dummypublicKeys;
         
         for(uint256 i = 0; i<5; i++){
-            dummypublicKeys[i] = getPK();
+            (,,dummypublicKeys[i]) = getPK(address(uint160(i+1)));
             ring.deposit{value: 1 ether}(dummypublicKeys[i]);
         }      
 
         assertEq(address(ring).balance, 5 ether);
 
-        dummypublicKeys[5] = getPK();
+        (,,dummypublicKeys[5]) = getPK(address(6));
         address newRing = doHopDeposit(dummypublicKeys[5]);
 
         assertEq(address(ring).balance, 0 ether);
         assertEq(address(newRing).balance, 6 ether);
+
+        
+    }
+
+    function testWithdraw() public {
+
+        vm.deal(msg.sender, 100 ether);
+
+        uint256[2][10] memory dummypublicKeys;
+        uint256[10] memory randomSKs;
+        uint256[10] memory stealthSKs;
+        
+        for(uint256 i = 0; i<5; i++){
+            (randomSKs[i],stealthSKs[i],dummypublicKeys[i]) = getPK(address(uint160(i+1)));
+            ring.deposit{value: 1 ether}(dummypublicKeys[i]);
+        }      
+
+        (randomSKs[5],stealthSKs[5],dummypublicKeys[5]) = getPK(address(6));
+        address newRing = doHopDeposit(dummypublicKeys[5]);
+
+        uint256[2][] memory pubKeys = ring.getPubKeys();
+
+
+
+        bytes memory pubKeysBytes = abi.encode(pubKeys);
+
+        emit log_named_uint("stealth_check", stealthSKs[4]);
+
+        //uint256 randSK, address targetAddress, bytes32 ringHash, bytes memory pubKeys
+        (uint256 c0, uint256[2] memory keyImage, uint256[] memory s) = signPK(randomSKs[4], address(uint160(5)), ring.ringHash(), pubKeysBytes);
+
+        
+
+        Hopper(newRing).withdraw(
+            payable(address(uint160(5))),
+            c0, 
+            keyImage, 
+            s
+        );
+
+        assertEq(address(10).balance, 1 ether);
+
 
         
     }

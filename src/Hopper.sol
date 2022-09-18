@@ -15,7 +15,7 @@ contract Hopper {
     bytes32 immutable depHash;
 
     uint8 dParticipantsNo;
-    bytes32 ringHash;
+    bytes32 public ringHash;
     mapping(uint8 => uint256[2]) public publicKeys;
     mapping(uint8 => uint256[2]) public keyImages;
 
@@ -97,11 +97,7 @@ contract Hopper {
     {
         uint256[2][6] memory _publicKeys;
 
-        unchecked{
-            for (uint8 i = 0; i < 6; i++) {
-                _publicKeys[i] = publicKeys[i];
-            }
-        }
+        
 
         bytes memory b = abi.encodePacked(
             address(this),
@@ -109,6 +105,22 @@ contract Hopper {
         );
 
         return keccak256(b);
+    }
+
+    function getPubKeys() public view returns (uint256[2][] memory) {
+        // todo; the order of fixed/dynamic sizes feels weird here
+        uint256[2][] memory _publicKeys = new uint256[2][](dParticipantsNo);
+        
+        unchecked{
+            for (uint256 i = 0; i < dParticipantsNo; i++) {
+                _publicKeys[i] = [
+                    uint256(publicKeys[uint8(i)][0]),
+                    uint256(publicKeys[uint8(i)][1])
+                ];
+            }
+        }
+
+        return _publicKeys;
     }
 
     function withdraw(
@@ -123,16 +135,7 @@ contract Hopper {
         // Convert public key to dynamic array
         // Based on number of people who have
         // deposited
-        uint256[2][] memory _publicKeys = new uint256[2][](dParticipantsNo);
-
-        unchecked{
-            for (uint256 i = 0; i < dParticipantsNo; i++) {
-                _publicKeys[i] = [
-                    uint256(publicKeys[uint8(i)][0]),
-                    uint256(publicKeys[uint8(i)][1])
-                ];
-            }
-        }
+        uint256[2][] memory _publicKeys = getPubKeys();
 
         // Attempts to verify ring signature
         bool signatureVerified = LSAG.verify(

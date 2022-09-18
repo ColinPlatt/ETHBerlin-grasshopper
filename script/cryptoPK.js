@@ -2,11 +2,15 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /*
  * alt_bn_128 curve in JavaScript
- * Referenced https://github.com/AztecProtocol/aztec-crypto-js/blob/master/bn128/bn128.js
+ *
+ * See https://github.com/AztecProtocol/aztec-crypto-js/blob/master/bn128/bn128.js
+ * and https://github.com/kendricktan/heiswap-dapp/blob/1eaaefd3d5ceff0ca41c3fa2ea6da6c4f3bd7cf7/src/utils/AltBn128.js
  */
 import crypto from 'crypto';
-import { keccak256 } from '@ethersproject/keccak256';
 import { defaultAbiCoder } from '@ethersproject/abi';
+import { hexlify, arrayify } from '@ethersproject/bytes';
+import { keccak256 } from '@ethersproject/keccak256';
+import { randomBytes } from '@ethersproject/random';
 import BN from 'bn.js';
 import EC from 'elliptic';
 // AltBn128 field properties
@@ -15,9 +19,10 @@ const N = new BN('21888242871839275222246405745257275088548364400416034343698204
 const A = new BN('5472060717959818805561601436314318772174077789324455915672259473661306552146', 10);
 const G = [new BN(1, 10), new BN(2, 10)];
 // Convenience Numbers
-const bnOne = new BN('1', 10);
-const bnTwo = new BN('2', 10);
-const bnThree = new BN('3', 10);
+export const bnZero = new BN('0', 10);
+export const bnOne = new BN('1', 10);
+export const bnTwo = new BN('2', 10);
+export const bnThree = new BN('3', 10);
 // AltBn128 Object
 const bn128 = {};
 // ECC Curve
@@ -245,43 +250,100 @@ const serialize = (arr) => {
         return acc;
     }, '');
 };
-
 export { bn128, powmod, h1, h2, serialize };
-
-
-
-/**
- * (2)
- */
-
-import { hexlify } from '@ethersproject/bytes';
-import { randomBytes } from '@ethersproject/random';
-import { BigNumber } from 'ethers';
-
-function getDepositPKForTargetAddress(targetAddress) {
-  const randomSk = hexlify(randomBytes(32));
-  const stealthSk = h1(serialize([randomSk, targetAddress]));
-
-  return (bn128.ecMulG(stealthSk)).map((x) => '0x' + x.toString(16));
+export function createRandomSk() {
+    return hexlify(randomBytes(32));
 }
+export function getStealthParams(randomSk, targetAddress) {
+    const stealthSk = h1(serialize([randomSk, targetAddress]));
+    const stealthPk = bn128.ecMulG(stealthSk);
+    return { stealthSk, stealthPk };
+}
+export function getParamsForTargetAddress(targetAddress) {
+    const randomSk = createRandomSk();
+    const { stealthSk, stealthPk } = getStealthParams(randomSk, targetAddress);
+    return {
+        randomSk,
+        stealthSk,
+        stealthPk,
+    };
+}
+function filterConvertPublicKeysToBN(ringPublicKeys) {
+    throw new Error(`debug: [${ringPublicKeys.map(k_p => `[(a)${k_p[0].toString(10)}(/a),(b)${k_p[1].toString(10)}(/b)]`).join(',')}`);
+    return ringPublicKeys
+        .map((x) => {
+        return [
+            // Slice the '0x'
+            new BN(Buffer.from(x[0].slice(2), 'hex')),
+            new BN(Buffer.from(x[1].slice(2), 'hex')),
+        ];
+    })
+        .filter((x) => x[0].cmp(bnZero) !== 0 && x[1].cmp(bnZero) !== 0);
+}
+function findSecretIdx(randomSk, targetAddress, publicKeysBN) {
+    // Check if user is able to generate any one of these public keys
 
-function encodeToAbi(rawData) {
-    const properlyFormattedData = [
-      BigNumber.from(rawData[0]),
-      BigNumber.from(rawData[1])
-    ];
+    //throw new Error(`debug: [${publicKeysBN.map(k => k.toString('hex')).join(',')}]`);
+    const { stealthPk } = getStealthParams(randomSk, targetAddress);
+    let secretIdx = publicKeysBN.findIndex((curPubKey) => {
+        return (curPubKey[0].cmp(stealthPk[0]) === 0 &&
+            curPubKey[1].cmp(stealthPk[1]) === 0);
+    });
+    return secretIdx;
+}
+// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
+export function makeWithdrawArgs(randomSk, targetAddress, ringHash, ringPublicKeys) {
+    //throw new Error(`debug: [${ringPublicKeys.map(k => k.toString('hex')).join(',')}]`);
 
+    const publicKeysBN = filterConvertPublicKeysToBN(ringPublicKeys);
+    const secretIdx = findSecretIdx(randomSk, targetAddress, publicKeysBN);
+    if (secretIdx === -1) {
+        throw new Error('no matching public key found');
+    }
+    // Create signature
+    const { stealthSk } = getStealthParams(randomSk, targetAddress);
+    const msgBuf = Buffer.concat([arrayify(ringHash), arrayify(targetAddress)]);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const signature = bn128.ringSign(msgBuf, publicKeysBN, stealthSk, secretIdx);
+    // Create the transaction
+    const c0 = signature[0].toString();
+    const s = signature[1].map((x) => x.toString());
+    const keyImage = [signature[2][0].toString(), signature[2][1].toString()];
+    return [targetAddress, c0, keyImage, s];
+}
+/** HELLO COLIN */
+export function haveCake(targetAddress) {
+    const {
+      randomSk, // string
+      stealthSk, // BN
+      stealthPk, // Point
+    } = getParamsForTargetAddress(targetAddress);
   
-    const encodedData = defaultAbiCoder.encode(
-      ['uint256', 'uint256'],
-      properlyFormattedData,
+    return defaultAbiCoder.encode(
+      ['address', 'uint256', 'uint256', 'uint256[2]'],
+      [
+        targetAddress,
+        randomSk,
+        stealthSk.toString(),
+        [stealthPk[0].toString(), stealthPk[1].toString()],
+      ],
     );
-    return encodedData;
   }
-  
-  const rawData = getDepositPKForTargetAddress('0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045');
-  const abiEncoded = encodeToAbi(rawData);
-  
-console.log(process.argv);
+export function eatCake(randomSk, targetAddress, ringHash, ringPublicKeys) {
+    const withdrawArgs = makeWithdrawArgs(randomSk, targetAddress, ringHash, ringPublicKeys);
+    return defaultAbiCoder.encode(['address', 'uint256', 'uint256[2]', 'uint256[]'], withdrawArgs);
+}
+process.stdout.write(process.argv[2] === 'haveCake'
+    ? haveCake(process.argv[3])
+    : (function () {
+        // const KEYS_OFFSET = 6;
+        // const inputKeys = Array(6)
+        //     .fill(0)
+        //     .map((_, idx) => [
+        //     process.argv[KEYS_OFFSET + idx * 2],
+        //     process.argv[KEYS_OFFSET + idx * 2 + 1],
+        // ]);
 
-  process.stdout.write(abiEncoded);
+        const inputKeys = defaultAbiCoder.decode(['uint256[2][]'], process.argv[6])
+        return eatCake(process.argv[3], process.argv[4], process.argv[5], inputKeys);
+    })());
